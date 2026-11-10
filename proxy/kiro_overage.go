@@ -54,7 +54,7 @@ func FetchOverageStatus(account *config.Account) (*OverageSnapshot, error) {
 	}
 
 	rawURL := kiroQAPIBase + "/getUsageLimits?origin=AI_EDITOR&resourceType=AGENTIC_REQUEST&isEmailRequired=true"
-	if profileArn := strings.TrimSpace(account.ProfileArn); profileArn != "" {
+	if profileArn := managementProfileArn(account); profileArn != "" {
 		rawURL += "&profileArn=" + neturl.QueryEscape(profileArn)
 	}
 
@@ -115,9 +115,13 @@ func SetOverageStatus(account *config.Account, enabled bool) (*OverageSnapshot, 
 		return nil, fmt.Errorf("account is nil")
 	}
 
-	profileArn, err := ResolveProfileArn(account)
-	if err != nil {
-		return nil, fmt.Errorf("resolve profileArn: %w", err)
+	profileArn := managementProfileArn(account)
+	if profileArn == "" && !isBuilderIDAccount(account) {
+		resolvedArn, err := ResolveProfileArn(account)
+		if err != nil {
+			return nil, fmt.Errorf("resolve profileArn: %w", err)
+		}
+		profileArn = resolvedArn
 	}
 
 	status := "DISABLED"
@@ -128,7 +132,9 @@ func SetOverageStatus(account *config.Account, enabled bool) (*OverageSnapshot, 
 		"overageConfiguration": map[string]string{
 			"overageStatus": status,
 		},
-		"profileArn": profileArn,
+	}
+	if profileArn != "" {
+		payload["profileArn"] = profileArn
 	}
 	body, _ := json.Marshal(payload)
 

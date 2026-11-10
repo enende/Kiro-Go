@@ -4,10 +4,62 @@ import (
 	"io"
 	"kiro-go/config"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestStreamingProfileArnUsesBuilderIDPlaceholder(t *testing.T) {
+	account := &config.Account{Provider: "BuilderId"}
+
+	if got := streamingProfileArn(account); got != builderIDProfileArn {
+		t.Fatalf("expected Builder ID placeholder ARN %q, got %q", builderIDProfileArn, got)
+	}
+}
+
+func TestStreamingProfileArnPrefersConfiguredArn(t *testing.T) {
+	account := &config.Account{
+		Provider:   "BuilderId",
+		ProfileArn: " arn:aws:codewhisperer:us-east-1:123456789012:profile/REAL ",
+	}
+
+	if got := streamingProfileArn(account); got != "arn:aws:codewhisperer:us-east-1:123456789012:profile/REAL" {
+		t.Fatalf("expected configured ARN, got %q", got)
+	}
+}
+
+func TestManagementProfileArnSkipsBuilderIDPlaceholder(t *testing.T) {
+	account := &config.Account{ProfileArn: builderIDProfileArn}
+
+	if got := managementProfileArn(account); got != "" {
+		t.Fatalf("expected placeholder ARN to be skipped, got %q", got)
+	}
+}
+
+func TestWithProfileArnQuerySkipsBuilderIDPlaceholder(t *testing.T) {
+	rawURL := "https://example.com/getUsageLimits?origin=AI_EDITOR"
+	account := &config.Account{ProfileArn: builderIDProfileArn}
+
+	if got := withProfileArnQuery(rawURL, account); got != rawURL {
+		t.Fatalf("expected URL without placeholder ARN, got %q", got)
+	}
+}
+
+func TestWithProfileArnQueryIncludesRealArn(t *testing.T) {
+	rawURL := "https://example.com/getUsageLimits?origin=AI_EDITOR"
+	realArn := "arn:aws:codewhisperer:us-east-1:123456789012:profile/REAL"
+	account := &config.Account{ProfileArn: realArn}
+
+	got := withProfileArnQuery(rawURL, account)
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse URL: %v", err)
+	}
+	if gotArn := parsed.Query().Get("profileArn"); gotArn != realArn {
+		t.Fatalf("expected real ARN %q, got %q", realArn, gotArn)
+	}
+}
 
 func TestResolveProfileArnReturnsCachedValueWithoutRequest(t *testing.T) {
 	kiroRestHttpStore.Store(&http.Client{

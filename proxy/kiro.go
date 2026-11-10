@@ -249,10 +249,8 @@ func setPayloadProfileArnForAccount(payload *KiroPayload, account *config.Accoun
 	}
 
 	payload.ProfileArn = strings.TrimSpace(payload.ProfileArn)
-	if account != nil {
-		if profileArn := strings.TrimSpace(account.ProfileArn); profileArn != "" {
-			payload.ProfileArn = profileArn
-		}
+	if profileArn := streamingProfileArn(account); profileArn != "" {
+		payload.ProfileArn = profileArn
 	}
 }
 

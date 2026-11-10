@@ -14,8 +14,42 @@ import (
 )
 
 const (
-	kiroRestAPIBase = "https://codewhisperer.us-east-1.amazonaws.com"
+	kiroRestAPIBase     = "https://codewhisperer.us-east-1.amazonaws.com"
+	builderIDProfileArn = "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX"
 )
+
+func isBuilderIDAccount(account *config.Account) bool {
+	return account != nil && strings.EqualFold(strings.TrimSpace(account.Provider), "BuilderId")
+}
+
+// streamingProfileArn returns the ARN required by generation endpoints.
+// Builder ID accounts do not own an Enterprise profile, so Kiro sends the
+// official IDE placeholder only for the streaming request.
+func streamingProfileArn(account *config.Account) string {
+	if account == nil {
+		return ""
+	}
+	if profileArn := strings.TrimSpace(account.ProfileArn); profileArn != "" {
+		return profileArn
+	}
+	if isBuilderIDAccount(account) {
+		return builderIDProfileArn
+	}
+	return ""
+}
+
+// managementProfileArn returns only a real profile ARN. The Builder ID
+// placeholder is rejected by usage, model-list, and preference endpoints.
+func managementProfileArn(account *config.Account) string {
+	if account == nil {
+		return ""
+	}
+	profileArn := strings.TrimSpace(account.ProfileArn)
+	if profileArn == builderIDProfileArn {
+		return ""
+	}
+	return profileArn
+}
 
 // GetUsageLimits 获取账户使用量和订阅信息
 func GetUsageLimits(account *config.Account) (*UsageLimitsResponse, error) {
@@ -119,6 +153,9 @@ func ResolveProfileArn(account *config.Account) (string, error) {
 	}
 	if profileArn := strings.TrimSpace(account.ProfileArn); profileArn != "" {
 		return profileArn, nil
+	}
+	if isBuilderIDAccount(account) {
+		return "", fmt.Errorf("Builder ID does not have an Enterprise Kiro profile")
 	}
 
 	// Try ListAvailableProfiles first, retrying on transient failures.
@@ -225,10 +262,7 @@ func listAvailableProfiles(account *config.Account) (string, error) {
 }
 
 func withProfileArnQuery(rawURL string, account *config.Account) string {
-	if account == nil {
-		return rawURL
-	}
-	profileArn := strings.TrimSpace(account.ProfileArn)
+	profileArn := managementProfileArn(account)
 	if profileArn == "" {
 		return rawURL
 	}

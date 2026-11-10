@@ -225,6 +225,15 @@ func TestSetPayloadProfileArnForAccountPreservesExplicitPayloadArn(t *testing.T)
 	}
 }
 
+func TestSetPayloadProfileArnForAccountUsesBuilderIDPlaceholder(t *testing.T) {
+	payload := &KiroPayload{}
+
+	setPayloadProfileArnForAccount(payload, &config.Account{Provider: "BuilderId"})
+	if payload.ProfileArn != builderIDProfileArn {
+		t.Fatalf("expected Builder ID placeholder ARN %q, got %q", builderIDProfileArn, payload.ProfileArn)
+	}
+}
+
 func mustParseURL(t *testing.T, raw string) *url.URL {
 	t.Helper()
 	parsed, err := url.Parse(raw)
